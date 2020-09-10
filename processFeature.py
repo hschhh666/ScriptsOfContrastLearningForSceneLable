@@ -75,7 +75,7 @@ interval = 5 # 每间隔interval米选择一帧
 pickupFrame = np.zeros(np.shape(GNSS)[0], dtype = np.bool) # 这些帧中，相邻帧的间隔基本是一致的
 pickupFrame[0] = 1
 lastFram = 0
-resampledId_to_originId = [0]
+resampledId_to_originId = [0] # 重采样后的某一帧对应的原始帧的索引
 for i, _ in enumerate(GNSS):
     deltaDis1 = np.sqrt(np.square(GNSS[i][0]-GNSS[lastFram][0])+ np.square(GNSS[i][1]-GNSS[lastFram][1]))
     if i != frameNum - 1:
@@ -100,7 +100,7 @@ plt.title('validate the interval between neighbor picked up frames, the interval
 #======================找到所有拐弯的位置======================
 turn_points = [] # 所有转弯的位置，格式为，[原始索引，重采样后索引，x，y]
 for i, _ in enumerate(gnss):
-    angleDelta = calculateAngel(gnss, i-2, i+2)
+    angleDelta = calculateAngel(gnss, i-2, i+2) # 根据yaw的变化来算出转弯
     if angleDelta >= 30:
         turn_points.append([resampledId_to_originId[i], i, gnss[i][0], gnss[i][1]])
 print('turn points number is ', len(turn_points))
@@ -157,9 +157,9 @@ for test_idx in range(1):
     plt.title('anchor %d similarity to other frames\nto pos avg dis %f\nto neg avg dis %f'%(anchor_idx,pos_avg_dis, neg_avg_dis))
     plt.plot(anchor_to_all_frames_dis)
 
-    plt.scatter(pos_idx,[anchor_to_all_frames_dis[i] for i in pos_idx],c='g')
-    plt.scatter(neg_idx,[anchor_to_all_frames_dis[i] for i in neg_idx],c='b')
-    plt.scatter(anchor_idx,anchor_to_all_frames_dis[anchor_idx],c='r')
+    plt.scatter(pos_idx,[anchor_to_all_frames_dis[i] for i in pos_idx],c='g') # 正样本为绿色点
+    plt.scatter(neg_idx,[anchor_to_all_frames_dis[i] for i in neg_idx],c='b') # 负样本为蓝色点
+    plt.scatter(anchor_idx,anchor_to_all_frames_dis[anchor_idx],c='r') # 锚点为红色点
 
 #======================绘制锚点间的混淆矩阵======================
 anchor_idx = [anchor_pos_list[i][0] for i in range(len(anchor_pos_list))]
@@ -179,8 +179,7 @@ dis_matrix = np.matmul(resampled_feat,resampled_feat_trans)
 plt.figure()
 plt.title('resampled video. similarity between frames')
 for i,_ in enumerate(turn_points):
-    plt.scatter(turn_points[i][1], turn_points[i][1], c = 'r', s = 5)
-
+    plt.scatter(turn_points[i][1], turn_points[i][1], c = 'r', s = 5) # 把计算出来的拐弯位置画在混淆矩阵上，来看看混淆矩阵突变的点是不是都是拐弯点
 
 plt.imshow(dis_matrix, interpolation='nearest', cmap=plt.cm.Greys)
 
@@ -188,19 +187,20 @@ plt.imshow(dis_matrix, interpolation='nearest', cmap=plt.cm.Greys)
 resampled_num = len(resampled_feat)
 neighbor_resampled_frame_similarity = [np.sum(resampled_feat[i]*resampled_feat[i+1]) for i in range(resampled_num-1)]
 plt.figure()
-plt.plot(neighbor_resampled_frame_similarity)
+plt.plot(neighbor_resampled_frame_similarity) # 把相邻帧相似度画成曲线
 plt.title('resampled video, neighbor frame similarity')
 for i,_ in enumerate(turn_points):
-    plt.scatter(turn_points[i][1], neighbor_resampled_frame_similarity[turn_points[i][1]], c = 'r',s=25)
+    plt.scatter(turn_points[i][1], neighbor_resampled_frame_similarity[turn_points[i][1]], c = 'r',s=25) # 把根据yaw计算出来的转弯点画在图上
 
+#======================根据相邻帧的相似度计算拐弯位置======================
 calculated_turn_points = [] # 根据相邻帧的相似度计算出来的拐弯位置，数据格式[原始索引，重采样后索引，x，y]
-similarity_thresh = 0.2
+similarity_thresh = 0.2 # 当相邻帧的相似度低于该阈值时，则认为到了弯道
 for i,_ in enumerate(neighbor_resampled_frame_similarity):
     if neighbor_resampled_frame_similarity[i] <= similarity_thresh:
         calculated_turn_points.append([resampledId_to_originId[i], i, gnss[i][0], gnss[i][1]])
-        plt.scatter(i, neighbor_resampled_frame_similarity[i], c = 'g', marker='+',s=50)
+        plt.scatter(i, neighbor_resampled_frame_similarity[i], c = 'g', marker='+',s=50) # 把根据阈值算出来的转弯点画在图上
 
-np.savetxt('D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\similarity_with_nextfram.txt', neighbor_resampled_frame_similarity,fmt='%.3f')
+# np.savetxt('D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\similarity_with_nextfram.txt', neighbor_resampled_frame_similarity,fmt='%.3f')
 
 #======================将视频重采样后，绘制某个样本点与其他地点的相似度图======================
 sampleId = 1799
@@ -230,7 +230,7 @@ plt.plot(GNSS[:,1], GNSS[:,0])
 plt.axis('equal')
 plt.title('campus0107_trajectory')
 
-#======================把车辆行驶的轨迹画出来======================
+#======================把计算得到的弯道画在车辆轨迹上======================
 plt.figure()
 for i,_ in enumerate(calculated_turn_points):
     plt.scatter(calculated_turn_points[i][3], calculated_turn_points[i][2], c = 'g')
