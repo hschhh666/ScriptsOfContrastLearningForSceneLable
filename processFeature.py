@@ -6,7 +6,7 @@ from utils import *
 import random
 
 
-featFile = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\deepLearningRes\\campusAllFrames\\memoryDic\\memoryNeg30FeatDim128e2e.npy' # 神经网络输出的数据集特征文件
+featFile = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\deepLearningRes\\campusAllFrames\\memoryDic\\memoryNeg18FeatDim128e2e.npy' # 神经网络输出的数据集特征文件
 subtitleFile = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\video_subtitle.srt' # 字幕文件，里面保存了每帧图片对应的经纬度
 posFile = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\pos.npy' # 把字幕文件里的经纬度提取出来保存成numpy数据，这样方便读取节约时间
 datasetPath = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\labeledData\\test2\\train' # 数据集路径
@@ -70,11 +70,18 @@ else:
 
 frameNum = np.shape(GNSS)[0] # 视频一共有多少帧
 
+
+# ====================== 计算相邻帧间的距离 ======================
+neighborFrameDis = [np.sqrt(np.square(GNSS[i][0]-GNSS[i-1][0]) + np.square(GNSS[i][1]-GNSS[i-1][1])) for i in range(1,np.shape(GNSS)[0])]
+plt.figure()
+plt.plot(neighborFrameDis)
+plt.title('distance between neighbor frame')
+
 #======================按距离间隔对帧进行重采样，这样相邻帧间的距离就是一致的了======================
-interval = 5 # 每间隔interval米选择一帧
-pickupFrame = np.zeros(np.shape(GNSS)[0], dtype = np.bool) # 这些帧中，相邻帧的间隔基本是一致的
-pickupFrame[0] = 1
-lastFram = 0
+interval = 5 # 每间隔interval米选择一帧，即对原始视频帧进行最近邻降采样
+pickupFrame = np.zeros(np.shape(GNSS)[0], dtype = np.bool) # bool型数组，大小就是视频帧总数。pickupFrame[i]表示是否采样第i帧，True则采样。
+pickupFrame[0] = True
+lastFram = 0 # 表示上一个采样到的帧的id，从第0帧开始采样
 resampledId_to_originId = [0] # 重采样后的某一帧对应的原始帧的索引
 for i, _ in enumerate(GNSS):
     deltaDis1 = np.sqrt(np.square(GNSS[i][0]-GNSS[lastFram][0])+ np.square(GNSS[i][1]-GNSS[lastFram][1]))
@@ -89,21 +96,54 @@ for i, _ in enumerate(GNSS):
                 pickupFrame[i+1] = 1
                 lastFram = i+1
                 resampledId_to_originId.append(i+1)
+        if deltaDis1 > interval:
+            print('[Warning] Downsample threshold distance %d mis less than vehicle move distance!!! Frame id = %d'%(interval, i))
+        if deltaDis1 > interval:
+            pickupFrame[i] = 1
+            lastFram = i
+            resampledId_to_originId.append(i)
 
 #======================画直方图可视化校验重采样后选择的相邻帧间的距离======================
-gnss = GNSS[pickupFrame] # gnss里保存的就是每隔interval米选择的帧
+gnss = GNSS[pickupFrame] # gnss里保存的就是每隔interval米选择的帧，即重采样后的帧的GNSS信息
 delta = [np.sqrt(np.square(gnss[i][0]-gnss[i-1][0])+ np.square(gnss[i][1]-gnss[i-1][1])) for i in range(1, np.shape(gnss)[0])]
 plt.figure()
 plt.hist(delta, bins = 100) # 这里是为了做验证，看看选择出来的帧相邻是否是interval
-plt.title('validate the interval between neighbor picked up frames, the interval should be %d m'%interval)
+plt.title('validate the interval between downsampled frames, the interval should be %d m'%interval)
 
 #======================找到所有拐弯的位置======================
 turn_points = [] # 所有转弯的位置，格式为，[原始索引，重采样后索引，x，y]
 for i, _ in enumerate(gnss):
-    angleDelta = calculateAngel(gnss, i-2, i+2) # 根据yaw的变化来算出转弯
+    angleDelta = calculateAngel(gnss, i-1, i+1) # 根据yaw的变化来算出转弯
     if angleDelta >= 30:
         turn_points.append([resampledId_to_originId[i], i, gnss[i][0], gnss[i][1]])
-print('turn points number is ', len(turn_points))
+print('calculated from GNSS file, turn points number is ', len(turn_points))
+
+# 逐帧判断当前帧是否为拐弯点，具体方法是，对于第i帧而言，找在它之前n米和之后n米的位置，计算这两个位置之间的方向差，如果大于某阈值t，则认为第i帧为拐弯点
+# find_gt_trun_dis_interval = 3 # 单位，米，对应注释里的n
+# find_gt_true_angle_thr = 30 # 单位，度，对应注释里的t
+# for i,_ in enumerate(GNSS):
+#     beforeI = i
+#     while beforeI >= 0:
+#         dis = np.sqrt(np.square(GNSS[beforeI][0]-GNSS[i][0])+ np.square(GNSS[beforeI][1]-GNSS[i][1]))
+#         if dis >= find_gt_trun_dis_interval:
+#             break
+#         beforeI = beforeI - 1
+#     if beforeI < 0:
+#         continue
+#     afterI = i
+#     while afterI < np.shape(GNSS)[0]:
+#         dis = np.sqrt(np.square(GNSS[afterI][0]-GNSS[i][0])+ np.square(GNSS[afterI][1]-GNSS[i][1]))
+#         if dis >= find_gt_trun_dis_interval:
+#             break
+#         afterI += 1
+#     if afterI >= np.shape(GNSS)[0]:
+#         continue
+#     angleDelta = calculateAngel(GNSS, beforeI, afterI)
+#     if angleDelta >= 30:
+#         turn_points.append([0, i, GNSS[i][0], GNSS[i][1]])
+# print('calculated from GNSS file, turn points number is ', len(turn_points))
+
+
 
 
 #======================计算锚点与正负样本间的平均距离======================
@@ -203,11 +243,11 @@ for i,_ in enumerate(neighbor_resampled_frame_similarity):
 # np.savetxt('D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\similarity_with_nextfram.txt', neighbor_resampled_frame_similarity,fmt='%.3f')
 
 #======================将视频重采样后，绘制某个样本点与其他地点的相似度图======================
-sampleId = 1799
+sampleId = 1000
 plt.figure()
 plt.scatter(sampleId,dis_matrix[sampleId][sampleId],c='r')
 plt.plot(list(range(np.shape(dis_matrix)[0])),dis_matrix[sampleId])
-plt.title('resampled video. sample %d'%sampleId)
+plt.title('similarity of resampled frame id %d to other resampled frames'%sampleId)
 
 #======================绘制某个点与所有视频帧的相似度======================
 print('resampled id %d is origin id '%sampleId,end='')
@@ -219,7 +259,7 @@ dises = np.matmul(feat, sample_feat)
 # dises = dises[pickupFrame]
 plt.figure()
 plt.plot(dises)
-plt.title('origin video. sample %d'%sampleId)
+plt.title('similarity of frame id %d to other frames'%sampleId)
 plt.scatter(sampleId,dises[sampleId],c='r')
 
 #======================把车辆行驶的轨迹画出来，标出拐弯处======================
@@ -228,7 +268,7 @@ for i,_ in enumerate(turn_points):
     plt.scatter(turn_points[i][3], turn_points[i][2], c = 'r')
 plt.plot(GNSS[:,1], GNSS[:,0])
 plt.axis('equal')
-plt.title('campus0107_trajectory')
+plt.title('campus0107_trajectory, ground truth turn')
 
 #======================把计算得到的弯道画在车辆轨迹上======================
 plt.figure()
@@ -236,7 +276,7 @@ for i,_ in enumerate(calculated_turn_points):
     plt.scatter(calculated_turn_points[i][3], calculated_turn_points[i][2], c = 'g')
 plt.plot(GNSS[:,1], GNSS[:,0])
 plt.axis('equal')
-plt.title('campus0107_trajectory')
+plt.title('campus0107_trajectory, calculated from features turn')
 
 
 
