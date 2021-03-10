@@ -9,19 +9,55 @@ import re
 video_file = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\video.avi' # 视频文件
 subtitle_file = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\video_subtitle.srt' # 字幕文件，里面保存了每帧图片对应的经纬度
 posFile = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\pos.npy' # 把字幕文件里的经纬度提取出来保存成numpy数据，这样方便读取节约时间
-anchor_img_path = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\labeledData\\test1' # 锚点照片路径
-img_save_path = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\labeledData\\test4' # 锚点附近的照片路径
+anchor_img_path = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\labeledData\\intersectionOrNot\\anchors' # 锚点照片路径
+img_save_path = 'D:\\Research\\2020ContrastiveLearningForSceneLabel\\Data\\campus_img_dataset\\labeledData\\intersectionOrNot\\datas' # 锚点附近的照片路径
 
+# =========================== 标锚点 ===========================
+
+if not os.path.exists(anchor_img_path): #目标文件夹如果不存在的话就创建
+    os.makedirs(anchor_img_path)
+else:
+    key = input('Dictionary %s already exists!!! Press [y] to cover it, or press any key to exit : '%img_save_path)
+    if key != 'y':
+        exit(0)
+    shutil.rmtree(anchor_img_path)
+    os.makedirs(anchor_img_path)
+
+origin_video = cv2.VideoCapture(video_file)
+frame = 0
+while 1:
+    ret, img = origin_video.read()
+    if not ret:
+        origin_video.release()
+        break
+    cv2.putText(img,'fno '+str(frame),(10,30),0,1,(0,0,255),2)
+    cv2.imshow('origin video', img)
+    key = cv2.waitKey(10)
+    if(key == 27):
+        cv2.destroyAllWindows()
+        break
+    if(key == 32):
+        img_name = os.path.join(anchor_img_path, str(frame)+'.png')
+        ret = cv2.imwrite(img_name, img)
+        if ret:
+            print('Write image to ' + img_name)
+        else:
+            print('Cannot write image to ' + img_name)
+            cv2.destroyAllWindows()
+            break
+    frame += 1
+
+exit(0)
 
 #======================创建保存照片的文件夹======================
 if not os.path.exists(img_save_path): #目标文件夹如果不存在的话就创建
-    os.mkdir(img_save_path)
+    os.makedirs(img_save_path)
 else:
     key = input('Dictionary %s already exists!!! Press [y] to cover it, or press any key to exit : '%img_save_path)
     if key != 'y':
         exit(0)
     shutil.rmtree(img_save_path)
-    os.mkdir(img_save_path)
+    os.makedirs(img_save_path)
 
 
 #======================获取所有锚点并为它们分别创建文件夹======================
@@ -34,7 +70,7 @@ for root, dirs, files in os.walk(anchor_img_path): # 获取所有锚点
             anchor_id.append(int(match.group(1)))
 anchor_id = sorted(anchor_id)
 for i in anchor_id:
-    os.mkdir(os.path.join(img_save_path,str(i))) # 为每个锚点创建文件夹
+    os.makedirs(os.path.join(img_save_path,str(i))) # 为每个锚点创建文件夹
 
 #======================参数配置======================
 
@@ -125,7 +161,7 @@ exit(0)
 #         class_id = id_to_class[frame]
 #         img_name = os.path.join(img_save_path, str(class_id))
 #         if not os.path.exists(img_name):
-#             os.mkdir(img_name)
+#             os.makedirs(img_name)
 #         img_name = os.path.join(img_name, str(frame)+'.png')
 #         ret = cv2.imwrite(img_name, img)
 #         if ret:
@@ -139,27 +175,6 @@ exit(0)
 
 
 
-# frame = 0
-# while 1:
-#     ret, img = origin_video.read()
-#     if not ret:
-#         origin_video.release()
-#         break
-#     cv2.putText(img,'fno '+str(frame),(10,30),0,1,(0,0,255),2)
-#     cv2.imshow('origin video', img)
-#     key = cv2.waitKey(10)
-#     if(key == 27):
-#         cv2.destroyAllWindows()
-#         break
-#     if(key == 32):
-#         img_name = os.path.join(img_save_path, str(frame)+'.png')
-#         ret = cv2.imwrite(img_name, img)
-#         if ret:
-#             print('Write image to ' + img_name)
-#         else:
-#             print('Cannot write image to ' + img_name)
-#             cv2.destroyAllWindows()
-#             break
-#     frame += 1
+
 
 # print('hhh')
